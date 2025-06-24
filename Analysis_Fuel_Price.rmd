@@ -1,8 +1,6 @@
 ---
 title: "Daily German Fuel Price Analysis (2022)"
-output:
-  html_document:
-    df_print: paged
+output: rmarkdown::github_document
 ---
 
 # Overview for fuel prices for 2022
@@ -17,7 +15,7 @@ agg_2022 <- read.csv("Datasets/German Retail Fuel Price Data 2014-2023/aggregate
 
 Loading library `tidyverse`
 
-```{r results = "hide"}
+```{r warning=FALSE,message=FALSE}
 library(tidyverse)
 ```
 
@@ -32,7 +30,7 @@ stacked_2022 <- agg_2022 %>%
 
 Generate a short overview of fuel prices for 2022 by month
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 ov_month <- stacked_2022 %>%
   select(month, fuel, price) %>%
   filter(price>1) %>%
@@ -42,12 +40,15 @@ ov_month <- stacked_2022 %>%
             max = max(price),
             median = median(price)
   )
+```
+
+```{r}
 print(ov_month)
 ```
 
 Generate a short overview of fuel prices for 2022 by station
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 ov_station <- stacked_2022 %>%
   select(station_uuid, fuel, price) %>%
   # try to drop false entries
@@ -62,6 +63,9 @@ ov_station <- stacked_2022 %>%
   ) %>%
   arrange(fuel,average)
 
+```
+
+```{r}
 head(ov_station)
 ```
 
@@ -84,7 +88,7 @@ ov_station %>%
   head()
 ```
 
-## Ploting
+## Plotting
 
 Import `ggplot2` for plotting
 
@@ -133,7 +137,7 @@ stacked_14_23 <- agg_14_to_23 %>%
 
 We generate an overview too
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 ov_year_month <- stacked_14_23 %>%
   select(year, month, fuel, price) %>%
   filter(price>1) %>%
@@ -144,22 +148,26 @@ ov_year_month <- stacked_14_23 %>%
             median = median(price)
   ) %>%
   arrange(year,month)
+```
 
+```{r}
 print(ov_year_month)
 ```
 
 If we want to generate a plot the show the fuel prices over time we have to combine the `year` and `month` into `date`. Therefore, we load the `zoo` library
 
-```{r results = "hide"}
+```{r warning=FALSE,message=FALSE}
 library(zoo)
 ```
 
 Now we combine `year` and `month` into `date`
 
-```{r}
+```{r warning=FALSE,message=FALSE}
 # combine year and month to a new date column
 ov_year_month$date <- zoo::as.yearmon(paste(ov_year_month$year, ov_year_month$month), "%Y %m")
+```
 
+```{r}
 head(ov_year_month)
 ```
 
