@@ -1,0 +1,175 @@
+---
+title: "Daily German Fuel Price Analysis (2022)"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Overview for fuel prices for 2022
+
+## Loading and transforming
+
+Loading data for 2022
+
+```{r}
+agg_2022 <- read.csv("Datasets/German Retail Fuel Price Data 2014-2023/aggregated_years/aggregated2022.csv")
+```
+
+Loading library `tidyverse`
+
+```{r results = "hide"}
+library(tidyverse)
+```
+
+Transforming `fuel` columns into one column plus an additional lable column
+
+```{r}
+stacked_2022 <- agg_2022 %>%
+  pivot_longer(diesel:e10, names_to = "fuel", values_to = "price")
+```
+
+## Generating an overview
+
+Generate a short overview of fuel prices for 2022 by month
+
+```{r}
+ov_month <- stacked_2022 %>%
+  select(month, fuel, price) %>%
+  filter(price>1) %>%
+  group_by(month,fuel) %>%
+  summarise(average = mean(price),
+            min = min(price),
+            max = max(price),
+            median = median(price)
+  )
+print(ov_month)
+```
+
+Generate a short overview of fuel prices for 2022 by station
+
+```{r}
+ov_station <- stacked_2022 %>%
+  select(station_uuid, fuel, price) %>%
+  # try to drop false entries
+  filter(price>1) %>%
+  group_by(station_uuid, fuel) %>%
+  # only consider if we have at least 6 month of data
+  filter(n()>5) %>%
+  summarise(average = mean(price),
+            min = min(price),
+            max = max(price),
+            median = median(price)
+  ) %>%
+  arrange(fuel,average)
+
+head(ov_station)
+```
+
+Sorted output of cheapest stations
+
+```{r}
+# cheapest diesel stations:
+ov_station %>%
+  filter(fuel == "diesel") %>%
+  head()
+
+# cheapest e5 stations:
+ov_station %>%
+  filter(fuel == "e5") %>%
+  head()
+
+# cheapest e10 stations:
+ov_station %>%
+  filter(fuel == "e10") %>%
+  head()
+```
+
+## Ploting
+
+Import `ggplot2` for plotting
+
+```{r}
+library(ggplot2)
+```
+
+Generate a line-plot showing the average price per month
+
+```{r}
+ggplot(data=ov_month, aes(x=month, y=average, group = fuel, color=fuel)) +
+  geom_line(stat="identity") +
+  labs(title = "Average fuel price per month in 2022",
+        y = "price in euro",
+        x = "Month") +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9,10,11,12)) +
+  geom_text(aes(label= round(average,2)),  hjust=1.5, size=3, col = "black") +
+  coord_cartesian(ylim=c(1.5,2.2))
+```
+
+# General overview of fuel price
+
+## Loading and transforming
+
+Since we have one file for each year, we need to merge them into one file
+
+```{r}
+# generating a list of all files
+list_of_files <- list.files(path = "Datasets/German Retail Fuel Price Data 2014-2023/aggregated_years",
+                            pattern = "\\.csv$",
+                            full.names = TRUE)
+
+# merging all file in the list
+agg_14_to_23 <- list_of_files %>%
+  map_dfr(read.csv, header=TRUE, fill=TRUE)
+```
+
+As before we are transforming `fuel` columns into one column plus an additional lable column
+
+```{r}
+stacked_14_23 <- agg_14_to_23 %>%
+  pivot_longer(diesel:e10, names_to = "fuel", values_to = "price")
+```
+
+## Plotting
+
+We generate an overview too
+
+```{r}
+ov_year_month <- stacked_14_23 %>%
+  select(year, month, fuel, price) %>%
+  filter(price>1) %>%
+  group_by(year,month,fuel) %>%
+  summarise(average = mean(price),
+            min = min(price),
+            max = max(price),
+            median = median(price)
+  ) %>%
+  arrange(year,month)
+
+print(ov_year_month)
+```
+
+If we want to generate a plot the show the fuel prices over time we have to combine the `year` and `month` into `date`. Therefore, we load the `zoo` library
+
+```{r results = "hide"}
+library(zoo)
+```
+
+Now we combine `year` and `month` into `date`
+
+```{r}
+# combine year and month to a new date column
+ov_year_month$date <- zoo::as.yearmon(paste(ov_year_month$year, ov_year_month$month), "%Y %m")
+
+head(ov_year_month)
+```
+
+We are now able to create a line plot the provides the fuel prices from 2014 to 2023
+
+```{r}
+ggplot(data=ov_year_month, aes(x=date, y=average, group = fuel, color=fuel)) +
+  geom_line(stat="identity") +
+  labs(title = "Average fule price from 2014 to 2023",
+        y = "price in euro",
+        x = "Year/Month") +
+  coord_cartesian(ylim=c(1,2.2))
+```
