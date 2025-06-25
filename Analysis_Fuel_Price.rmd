@@ -109,7 +109,7 @@ ggplot(data=ov_month, aes(x=month, y=average, group = fuel, color=fuel)) +
   coord_cartesian(ylim=c(1.5,2.2))
 ```
 
-# General overview of fuel price
+# General overview of fuel price from 2014 to 2023
 
 ## Loading and transforming
 
@@ -133,7 +133,7 @@ stacked_14_23 <- agg_14_to_23 %>%
   pivot_longer(diesel:e10, names_to = "fuel", values_to = "price")
 ```
 
-## Plotting
+## Generating an overview
 
 We generate an overview too
 
@@ -171,6 +171,8 @@ ov_year_month$date <- zoo::as.yearmon(paste(ov_year_month$year, ov_year_month$mo
 head(ov_year_month)
 ```
 
+## Plotting
+
 We are now able to create a line plot the provides the fuel prices from 2014 to 2023
 
 ```{r}
@@ -181,3 +183,332 @@ ggplot(data=ov_year_month, aes(x=date, y=average, group = fuel, color=fuel)) +
         x = "Year/Month") +
   coord_cartesian(ylim=c(1,2.2))
 ```
+
+Additionally, we may consider a comparison of the average price of, e.g. **e10**, over the years:
+
+```{r}
+ov_year_month %>%
+        filter(fuel == "e10") %>%
+        ggplot(aes(x=month, y=average, group = year, color=as.factor(year))) +
+        geom_line(stat="identity") +
+        labs(title = "Average e10 price per month grouped by year",
+            y = "average e10 price in euro",
+            x = "month") +
+        scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9,10,11,12)) +
+        coord_cartesian(ylim=c(1,2.2))
+```
+
+We can get a better feeling for a monthly behaviour if we normalize the price of, **hear e10**, for each year:
+
+```{r}
+temp <- ov_year_month
+temp$norm_price_av <- ave(temp$average, temp$year, FUN=function(x) (x - min(x))/(max(x) - min(x)))
+```
+
+Let us plot a comparison of the normed average price of **e10** over the years:
+
+```{r}
+temp %>%
+        filter(fuel == "e10") %>%
+        filter(year != "2014") %>% # remove partial year
+        filter(year != "2023") %>% # remove partial year
+        ggplot(aes(x=month, y=norm_price_av, group = year, color=as.factor(year))) +
+        scale_color_manual(values=c("midnightblue", "darkgreen", "red", "gold", "cyan", "blue", "black", "brown")) +
+        geom_line(stat="identity") +
+        labs(title = "Average e10 price per month grouped by year",
+            y = "[0,1] normalization of average fuel price",
+            x = "month") +
+        scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9,10,11,12)) +
+        coord_cartesian(ylim=c(0,1))
+```
+
+In general, we notice a reduce price in **January** and **December**.
+
+In the data for **2022** we see a high increase in **February**. This is probably due to the Russian war on Ukraine. We also notice a drop from **June** to **August**. In that time the german government provided tax reduction on fuel.
+
+# Average cheapest Month
+
+Using `stacked_14_23` to get an average price per month per fuel
+
+## Generating an Overview
+
+```{r warning=FALSE,message=FALSE}
+ov_14_23_month <- stacked_14_23 %>%
+  select(month, fuel, price) %>%
+  filter(price>1) %>%
+  group_by(month,fuel) %>%
+  summarise(average = mean(price),
+            min = min(price),
+            max = max(price),
+            median = median(price)
+  ) %>%
+  arrange(month)
+```
+
+```{r}
+head(ov_14_23_month)
+```
+
+## Plotting
+
+```{r}
+ggplot(data=ov_14_23_month, aes(x=month, y=average, group = fuel, color=fuel)) +
+  geom_line(stat="identity") +
+  labs(title = "Average fule price from 2014 to 2023",
+        y = "price in euro",
+        x = "Month") +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9,10,11,12)) +
+  geom_text(aes(label= round(average,2)),  vjust=1.5, size=3, col = "black") +
+  coord_cartesian(ylim=c(1.25,1.525))
+```
+
+From 2014 to 2023 the month with the lower average price are **January**, **August** and **December**. For **diesel** the **winter** and **summer** month are less expansive compared to **spring** and **fall**.
+
+# Location Comparison
+
+In this section we will consider fuel prices based on there location.
+
+## Loading and Transforming
+
+Loading data containing station information.
+
+```{r}
+stations <- read.csv("Datasets/German Retail Fuel Price Data 2014-2023/stations.csv")
+```
+
+### Cleaning City Names - Writing
+
+Let us see how many entries there are per **city**.
+
+```{r}
+stations %>% count(city) %>% head(10)
+```
+
+We notice that some city names - are all **capital** - have a leading **spacec** - have a **space** at the end - are `gelöscht`, `mehr aktiv`, `please delete - bitte loeschen` - only have one station - contain an **odd** symbole
+
+We have to do something about this. While we can and will ignore some, e.g. `alsdorf h�ngen` should be the same as `alsdorf-hoengen`, we will make some changes to others.
+
+Making all city names **lowercase**
+
+```{r}
+stations$city <- tolower(stations$city)
+```
+
+To remove a **space** at the beginning or et the end we use `trimws`
+
+```{r}
+stations$city <- trimws(stations$city)
+
+```
+
+We will ignore the rest for now, and deal with them if they bother us later.
+
+Lets se how many entries there are per **city** again:
+
+```{r}
+stations %>% count(city) %>% head(10)
+```
+
+### Merging Tables
+
+We will join the table `stations` to the table of all fuel prices from 2014 to 2023, namely `stacked_14_23` Before that, we select only the columns we want from `stations`
+
+```{r}
+stations_select <- stations %>%
+  select(uuid,name,brand,post_code,city)
+```
+
+for the **joining** we use `library(dplyr)`
+
+```{r warning=FALSE,message=FALSE}
+library(dplyr)
+```
+
+While joining, we have to account for the different `station ID` names in the tables
+
+```{r}
+full_fuel_table <- left_join(stacked_14_23, stations_select, by=c("station_uuid"= "uuid"))
+```
+
+### Cleaning City Names - NaN and Blanks
+
+Let us have a look at the first and last few entries if we sort `full_fuel_table` by **city**:
+
+```{r}
+temp <- full_fuel_table %>%
+  arrange(city)
+```
+
+First 10 entries:
+
+```{r}
+print(head(temp,10))
+```
+
+Last 10 entries:
+
+```{r}
+print(tail(temp,10))
+```
+
+We notice: - some `city names` are **blank** - - here we still have `post_code` - some `city names` are **NaN** - - here we have no entry in `stations` for the ID in `stacked_14_23`
+
+Since we want to compare cities, we remove every entry that does not have an entry in `post_code`. Removing rows with `NaN`:
+
+```{r}
+full_fuel_table_cleaned <-  na.omit(full_fuel_table)
+```
+
+Let us have a look at the first and last few entries if we sort `full_fuel_table_cleaned` by **city**:
+
+```{r}
+temp <- full_fuel_table_cleaned %>%
+  arrange(city)
+```
+
+First 10 entries:
+
+```{r}
+print(head(temp,10))
+```
+
+Last 10 entries:
+
+```{r}
+print(tail(temp,10))
+```
+
+We still have **blank** city names, but for this case we can consider the postal code.
+
+### Cleaning City Names - Postal Code
+
+Create an overview of all stations that have a blank city entry:
+
+```{r}
+temp <- stations %>%
+  select(uuid,city,post_code) %>%
+  filter(city=="")
+print(temp)
+```
+
+We get - `47929`, which is the postal code of **grefrath** - `97688`, which is the postal code of **bad kissingen** - `44357`, which is the postal code of **dortmund** - , wich we will remove
+
+> It would be best to change this in `stations` at the beginning but this document is ment to show the process. Therefore, I wil will try to add this information now without just reapplying the above.
+
+Adding missing information in `stations` first:
+
+```{r}
+stations$city[stations$post_code == 47929] <- "grefrath"
+stations$city[stations$post_code == 97688] <- "bad kissingen"
+stations$city[stations$post_code == 44357] <- "dortmund"
+```
+
+Adding missing information in `full_fuel_table_cleaned`:
+
+```{r}
+full_fuel_table_cleaned$city[full_fuel_table_cleaned$post_code == 47929] <- "grefrath"
+full_fuel_table_cleaned$city[full_fuel_table_cleaned$post_code == 97688] <- "bad kissingen"
+full_fuel_table_cleaned$city[full_fuel_table_cleaned$post_code == 44357] <- "dortmund"
+```
+
+Now all that is left for now is removing **blank** entries in `postal_code` as well as **00000** entries.
+
+```{r}
+full_fuel_table_cleaned <- full_fuel_table_cleaned %>%
+        filter(post_code != "") %>%
+        filter(post_code != "00000")
+```
+
+## Generate an Overview of Fuel Price by location
+
+Since a **city** can have a multiple **post codes** but a **post code** is tied to exactly one **city**, we will group by `post_code` and later match them with the corresponding city.
+
+> This seems odd, since we added the city information above, but remember that this is ment as a learning experience. The goal is not getting a result fast, it is to overcome problems occurring on the way. So yes, we could have skipped the `city` cleaning part and just went with the `post_code` from the beginning.
+
+To identify the post code and provide a city name, we use data set obtained [here][<https://www.datenbörse.net/item/Postleitzahlen-Datenbank_Deutschland>]. We had to replace the seperator `;` with `,`.
+
+Loding the data:
+
+```{r}
+plz <- read.csv("Datasets/Postleitzahlen 2023 mit Bundesland.csv")
+# column names: PLZ,ORT,ZUSATZ,BUNDESLAND 
+# (post code, name of place (city name), additional information, region/state)
+```
+
+A joining attempted:
+
+> `full_fuel_table_cleaned_plz <- left_join(full_fuel_table_cleaned, plz, by=c("post_code"= "PLZ"))`
+
+resulted in a warning:
+
+> Warning in left_join(full_fuel_table_cleaned, plz, by = c(post_code = "PLZ")) :
+>
+> Detected an unexpected many-to-many relationship between `x` and `y`.
+>
+> i Row 16480 of `x` matches multiple rows in `y`. \> i Row 6973 of `y` matches multiple rows in `x`.
+>
+> i If a many-to-many relationship is expected, set `relationship = >   "many-to-many"` to silence this warning.
+
+Considering the file, on notice that if several places have the same post code, they are **not** combined in one place. Therefore, postal codes can occur multiple times. In order to fix that one could remove duplicates ,e.g. arbitrarily. We will not do so, but proceed by only focusing on the post code for now.
+
+Create an overview of average fuel prices grouped by `post_code`:
+
+```{r}
+temp <- full_fuel_table_cleaned %>%
+        select(year, month, fuel, price, brand, post_code) %>%
+        filter(price>0.9) %>% # there are odd results otherwise
+        group_by(post_code) %>%
+        summarise(average = mean(price),
+                  min = min(price),
+                  max = max(price),
+                  median = median(price),
+                  size = n()              # group size, how many data entries were combined
+  ) %>%
+  arrange(average)
+
+print(head(temp))
+```
+
+Short detour: We should think about `size`, since it is important to know how many entire were combined in order to evaluate if the quality of the outcome.
+
+We have **10 years** wherein **2** are incomplete. For **2014** we have **7** month of data and for **2023** we have **4** month of data. Keeping that in mind, we end up with `8*12 + 7 + 4 = 107` different month.
+
+Furthermore, we distinguish between **3** different fuels: `diesel, e5, e10`.
+
+Combining this, a station that provides all three fuels over the full length of 107 month, should provide us with **321** data entries.
+
+Let us count the entries we have per `station_uuid`:
+
+```{r}
+temp2 <- full_fuel_table_cleaned %>%
+      filter(price>0.8) %>% # there are odd results otherwise
+      group_by(station_uuid) %>%
+      summarise(size = n() ) %>%             # group size, how many data entries were combined
+      arrange(size)
+```
+
+Let us look at the first few entries
+
+```{r}
+print(head(temp2,5))
+```
+
+Let us look at the last few entries
+
+```{r}
+print(tail(temp2,5))
+```
+
+We notice that some stations do not provide us with enough information to use.
+
+> We should think about how much information is enough. Reasons for missing data could be:
+>
+> -   closer over a time frame
+>
+> -   existence of the station is
+>
+> -   reduced collection of fuels
+>
+> There might be more reasons. Since 321 entries were perfect I think it would be fine if we go wth 50% of this as a threshold. One could provide more checks here, e.g. if the missing data is connected or grouped in some way (fuel, period of time), but I will not do that.
+
+> In addition, we see that some station have more entries than they should have. Going back through all iterations I found the reason: It can happen that e.g. in aggregated2016.csv there is information about the 12th month of a station in aggregated2015.csv, but that information is also provided in aggregated2015.csv. Therefore, we sometimes get doubles of december entries. Since we usually consider the average of some group, it makes no difference for us at the moment. Therefore, I will not do anything about that right now, but if one wanted to something about this, one could just take the average.
