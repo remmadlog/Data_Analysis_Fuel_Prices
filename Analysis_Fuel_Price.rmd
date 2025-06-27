@@ -224,6 +224,8 @@ temp %>%
 
 In general, we notice a reduce price in **January** and **December**.
 
+In the data for **2020** we notice a huge price drop from **February** to **April**. This marks the start of the first Corona lockdown.
+
 In the data for **2022** we see a high increase in **February**. This is probably due to the Russian war on Ukraine. We also notice a drop from **June** to **August**. In that time the german government provided tax reduction on fuel.
 
 # Average cheapest Month
@@ -378,9 +380,9 @@ Last 10 entries:
 print(tail(temp,10))
 ```
 
-We still have **blank** city names, but for this case we can consider the postal code.
+We still have **blank** city names, but for this case we can consider the post code.
 
-### Cleaning City Names - Postal Code
+### Cleaning City Names - Post Code
 
 Create an overview of all stations that have a blank city entry:
 
@@ -391,7 +393,7 @@ temp <- stations %>%
 print(temp)
 ```
 
-We get - `47929`, which is the postal code of **grefrath** - `97688`, which is the postal code of **bad kissingen** - `44357`, which is the postal code of **dortmund** - , wich we will remove
+We get - `47929`, which is the post code of **grefrath** - `97688`, which is the post code of **bad kissingen** - `44357`, which is the post code of **dortmund** - , wich we will remove
 
 > It would be best to change this in `stations` at the beginning but this document is ment to show the process. Therefore, I wil will try to add this information now without just reapplying the above.
 
@@ -419,9 +421,21 @@ full_fuel_table_cleaned <- full_fuel_table_cleaned %>%
         filter(post_code != "00000")
 ```
 
+We also get rid of odd prices:
+
+```{r}
+full_fuel_table_cleaned <- full_fuel_table_cleaned %>%
+      filter(price>0.7) %>%                                 # would be better to use statistical analysis here
+      filter(price<5)                                       # would be better to use statistical analysis here
+```
+
 ## Generate an Overview of Fuel Price by location
 
-Since a **city** can have a multiple **post codes** but a **post code** is tied to exactly one **city**, we will group by `post_code` and later match them with the corresponding city.
+~~Since a **city** can have a multiple **post codes** but a **post code** is tied to exactly one **city**, we will group by `post_code` and later match them with the corresponding city.~~
+
+**A post code can have multiple place names and vice versa. This makes it quite hard to identify.**
+
+See for example the post code **22113**. It references to a place in **Hamburg** as well as to **Oststeinbek**. The later one is not even part of the same region/state (Bundesland).
 
 > This seems odd, since we added the city information above, but remember that this is ment as a learning experience. The goal is not getting a result fast, it is to overcome problems occurring on the way. So yes, we could have skipped the `city` cleaning part and just went with the `post_code` from the beginning.
 
@@ -456,7 +470,6 @@ Create an overview of average fuel prices grouped by `post_code`:
 ```{r}
 temp <- full_fuel_table_cleaned %>%
         select(year, month, fuel, price, brand, post_code) %>%
-        filter(price>0.9) %>% # there are odd results otherwise
         group_by(post_code) %>%
         summarise(average = mean(price),
                   min = min(price),
@@ -480,23 +493,22 @@ Combining this, a station that provides all three fuels over the full length of 
 Let us count the entries we have per `station_uuid`:
 
 ```{r}
-temp2 <- full_fuel_table_cleaned %>%
-      filter(price>0.8) %>% # there are odd results otherwise
+temp <- full_fuel_table_cleaned %>%
       group_by(station_uuid) %>%
-      summarise(size = n() ) %>%             # group size, how many data entries were combined
-      arrange(size)
+      summarise(occurrence_of_uuid = n() ) %>%             # group size, how many data entries were combined
+      arrange(occurrence_of_uuid)
 ```
 
 Let us look at the first few entries
 
 ```{r}
-print(head(temp2,5))
+print(head(temp,5))
 ```
 
 Let us look at the last few entries
 
 ```{r}
-print(tail(temp2,5))
+print(tail(temp,5))
 ```
 
 We notice that some stations do not provide us with enough information to use.
@@ -512,3 +524,22 @@ We notice that some stations do not provide us with enough information to use.
 > There might be more reasons. Since 321 entries were perfect I think it would be fine if we go wth 50% of this as a threshold. One could provide more checks here, e.g. if the missing data is connected or grouped in some way (fuel, period of time), but I will not do that.
 
 > In addition, we see that some station have more entries than they should have. Going back through all iterations I found the reason: It can happen that e.g. in aggregated2016.csv there is information about the 12th month of a station in aggregated2015.csv, but that information is also provided in aggregated2015.csv. Therefore, we sometimes get doubles of december entries. Since we usually consider the average of some group, it makes no difference for us at the moment. Therefore, I will not do anything about that right now, but if one wanted to something about this, one could just take the average.
+
+In order to use the information we joint `temp` to `full_fuel_table_cleaned` by `uuid`:
+
+```{r}
+full_fuel_table_cleaned <- left_join(full_fuel_table_cleaned, temp, by="station_uuid")
+
+```
+
+Now we can get valuable results regarding fuel prices by post code.
+
+```{r warning=FALSE,message=FALSE}
+fuel_price_postcode <- full_fuel_table_cleaned %>%
+        filter(occurrence_of_uuid>160) %>%    # roughly 50% all possible data per uuid
+        group_by(post_code,fuel,year) %>%
+        summarise(av_price = mean(price),
+                  size = n())
+```
+
+Next we generate an overview for each year and each fuel:
