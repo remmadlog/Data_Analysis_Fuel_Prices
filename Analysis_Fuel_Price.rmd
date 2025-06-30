@@ -703,3 +703,8 @@ p <- ggplot(ger_end) +
   transition_states(date)
 animate(p, fps=3)
 ```
+
+Sadly we do not see so much differences in each time state.
+This make sense though, since fuel prices in Germany are primarily driven by supply and demand, influenced by global oil prices, and further affected by taxes and value-added tax.
+
+For now, we will leve it at this.

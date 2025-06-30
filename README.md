@@ -13,4 +13,20 @@ Using a dataset found [here](https://www.kaggle.com/datasets/oles04/petrol-stati
 
 ## Overview of Fuel Prices in Germany
 
-A first overview can be found here [Analysis_Fuel_Price.md](Analysis_Fuel_Price.md).
+### Full Analysis
+A full overview can be found here [Analysis_Fuel_Price.md](Analysis_Fuel_Price.md).
+
+### Partial Results -- Average Fuel Price per Month in 2022
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+### Partial Results -- Average Price of e10 per Month Groupen by Year
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+
+### Partial Results -- Average Fuel Price per Month from 214-2023
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+
+### Partial Results -- Map of Germany with Average e10 Prices per Federal State in 2022
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-60-1.png)<!-- -->
+
+### Partial Results -- Animated Map of Germany with Average e10 Prices per Federal State over Time
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-64-1.gif)<!-- -->

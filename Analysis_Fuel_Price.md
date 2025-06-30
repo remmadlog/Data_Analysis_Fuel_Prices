@@ -680,7 +680,7 @@ part of the same region/state (Bundesland).
 
 To identify the post code and provide a city name, we use data set
 obtained
-\[here\]\[<https://www.datenbörse.net/item/Postleitzahlen-Datenbank_Deutschland>\].
+[here](https://www.datenbörse.net/item/Postleitzahlen-Datenbank_Deutschland).
 We had to replace the seperator `;` with `,`.
 
 Loding the data:
@@ -691,7 +691,7 @@ plz <- read.csv("Datasets/Postleitzahlen 2023 mit Bundesland.csv")
 # (post code, name of place (city name), additional information, region/state)
 ```
 
-A joining attempted:
+The joining attempted
 
 > `full_fuel_table_cleaned_plz <- left_join(full_fuel_table_cleaned, plz, by=c("post_code"= "PLZ"))`
 
@@ -1066,3 +1066,9 @@ animate(p, fps=3)
 ```
 
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-64-1.gif)<!-- -->
+
+
+Sadly we do not see so much differences in each time state.
+This make sense though, since fuel prices in Germany are primarily driven by supply and demand, influenced by global oil prices, and further affected by taxes and value-added tax.
+
+For now, we will leve it at this.
