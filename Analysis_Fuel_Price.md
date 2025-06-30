@@ -834,7 +834,235 @@ Now we can get valuable results regarding fuel prices by post code.
 ``` r
 fuel_price_postcode <- full_fuel_table_cleaned %>%
         filter(occurrence_of_uuid>160) %>%    # roughly 50% all possible data per uuid
-        group_by(post_code,fuel,year) %>%
+        group_by(post_code,year, month,fuel) %>%
         summarise(av_price = mean(price),
-                  size = n())
+                  group_size = n())
 ```
+
+Next we generate an overview for each year and each fuel:
+
+``` r
+f <- "e10"  # Set FUEL
+y <- 2022   # Set Year
+
+temp <- fuel_price_postcode %>%
+        filter(year == y) %>%
+        filter(fuel == f) %>%
+        arrange(av_price)
+```
+
+``` r
+print(head(temp,15))
+```
+
+    ## # A tibble: 15 × 6
+    ## # Groups:   post_code, year, month [15]
+    ##    post_code  year month fuel  av_price group_size
+    ##    <chr>     <int> <int> <chr>    <dbl>      <int>
+    ##  1 85416      2022     1 e10      0.766          1
+    ##  2 25709      2022     8 e10      0.847          1
+    ##  3 36169      2022     1 e10      0.895          1
+    ##  4 18375      2022     6 e10      1.03           1
+    ##  5 79798      2022     8 e10      1.13           1
+    ##  6 18465      2022     6 e10      1.19           1
+    ##  7 25923      2022     3 e10      1.22           1
+    ##  8 95478      2022    10 e10      1.23           1
+    ##  9 70734      2022     2 e10      1.24           2
+    ## 10 84378      2022     6 e10      1.24           1
+    ## 11 95478      2022     1 e10      1.26           1
+    ## 12 53557      2022     4 e10      1.26           1
+    ## 13 85652      2022     8 e10      1.30           1
+    ## 14 34359      2022     1 e10      1.31           1
+    ## 15 58452      2022     9 e10      1.33           2
+
+## Map Plot
+
+Next we identify the `post_code` with the corresponding
+state/region/Bundesland. We shall remember that this is not possible,
+since it happens that a post code occurs in two different sates, see,
+e.g. **22113**. Regardless we will do so. In cases as above we will
+count the post code for both states.
+
+We start by joining `full_fuel_table_cleaned` with `plz`:
+
+``` r
+fuel_price_state <- left_join(full_fuel_table_cleaned,plz,by = c("post_code" = "PLZ"))
+```
+
+We are presented with the following waring:
+
+> Warning in left_join(full_fuel_table_cleaned, plz, by = c(post_code =
+> “PLZ”)) : Detected an unexpected many-to-many relationship between `x`
+> and `y`. i Row 40 of `x` matches multiple rows in `y`. i Row 12091 of
+> `y` matches multiple rows in `x`. i If a many-to-many relationship is
+> expected, set `relationship =   "many-to-many"` to silence this
+> warning.
+
+We assumed that something like that might happen, since of the example
+**22113**. The problem here its, that this happens not because of a
+**state** but because of a **place**. In order to avoid that we will
+group `plz` by `BUNDESLAND` and `PLZ`.
+
+``` r
+plz_state <- plz %>%
+        group_by(BUNDESLAND,PLZ) %>%
+        summarise(group_size = n())
+```
+
+    ## `summarise()` has grouped output by 'BUNDESLAND'. You can override using the
+    ## `.groups` argument.
+
+``` r
+print(head(plz_state),10)
+```
+
+    ## # A
+    ## #   tibble:
+    ## #   6 × 3
+    ## # Groups:  
+    ## #   BUNDESLAND
+    ## #   [1]
+    ## # ℹ 3
+    ## #   more
+    ## #   variables:
+    ## #   BUNDESLAND <chr>,
+    ## #   PLZ <chr>,
+    ## #   group_size <int>
+
+Having a look at the outcome we notice - some entries of `PLZ` are not
+numerical - some entries of `BUNDESLAND` are blank, not a state or
+misspelled
+
+Cleaning of `plz`:
+
+``` r
+plz_clean <- plz %>%
+        filter(BUNDESLAND != "")
+
+plz_clean$BUNDESLAND <- trimws(plz_clean$BUNDESLAND)
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Anhalt"] <- "Sachsen-Anhalt"
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Baden"] <- "Baden-Württemberg"
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Bay"] <- "Bayern"
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Holst"] <- "Schleswig-Holstein"
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Holstein"] <- "Schleswig-Holstein"
+plz_clean$BUNDESLAND[plz_clean$BUNDESLAND == "Mecklenburg"] <- "Mecklenburg-Vorpommern"
+
+
+states_list <-  c("Baden-Wuerttemberg","Bayern","Berlin","Brandenburg","Bremen","Hamburg","Hessen","Mecklenburg-Vorpommern","Niedersachsen","Nordrhein-Westfalen","Rheinland-Pfalz","Saarland","Sachsen","Sachsen-Anhalt","Schleswig-Holstein","Thueringen")
+
+
+plz_state <- plz_clean %>%
+        filter(BUNDESLAND %in% states_list) %>%
+        group_by(BUNDESLAND, PLZ) %>%
+        summarise(group_size = n())
+```
+
+We now join again and group by `BUNDESLAND`, `year`, `month` and `fuel`
+
+``` r
+temp <- left_join(full_fuel_table_cleaned,plz_state,by = c("post_code" = "PLZ"))
+fuel_price_state <- temp%>%
+        group_by(BUNDESLAND, year, month, fuel) %>%
+        filter(BUNDESLAND %in% states_list) %>%
+        summarise(av_price = median(price),
+                  gr_size = n())
+```
+
+We now have a well-prepared data set, that can be used to get a overview
+of different fuel prices per state per year per month.
+
+Loading some libraries:
+
+``` r
+library(sf)
+library(tidyverse)
+theme_set(theme_bw())
+library(giscoR)
+```
+
+To provide a geographical context we want to add the administrative
+boundaries of Germany on a federal-state scale.
+
+``` r
+germany <- gisco_get_nuts(
+  nuts_level = 1,
+  resolution = 10,
+  country = "Germany",
+  year = 2021
+)
+
+# small changes due to our own data
+germany$NUTS_NAME[germany$NUTS_NAME == "Thüringen"] <- "Thueringen"
+germany$NUTS_NAME[germany$NUTS_NAME == "Baden-Württemberg"] <- "Baden-Wuerttemberg"
+```
+
+For the year **2022** and **e10** we then get
+
+``` r
+temp <- fuel_price_state %>%
+        filter(year == 2022) %>%
+        filter(fuel == "e10") %>%
+        select(BUNDESLAND, av_price) %>%
+        group_by(BUNDESLAND) %>%
+        summarise(av_price=mean((av_price)))
+```
+
+    ## Adding missing grouping variables: `year`, `month`
+
+``` r
+ger_end <- germany %>%
+  left_join(temp, by = c("NUTS_NAME" = "BUNDESLAND"))
+
+# plot(ger_end["av_price"])
+
+# using ggplot2
+ggplot(ger_end) +
+  geom_sf(aes(fill = av_price))
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-60-1.png)<!-- -->
+
+We will now try to get an animated version. For this we use:
+
+``` r
+library(gganimate)
+```
+
+We combine `month` and `year` to a `date` column:
+
+``` r
+# combine year and month to a new date column
+fuel_price_state$date <- zoo::as.yearmon(paste(fuel_price_state$year, fuel_price_state$month), "%Y %m")
+```
+
+Considering `e10:`
+
+``` r
+temp <- fuel_price_state %>%
+        filter(fuel == "e10") %>%
+        select(BUNDESLAND, date,av_price) %>%
+        group_by(BUNDESLAND, date) %>%
+        summarise(av_price=mean((av_price)))
+```
+
+    ## Adding missing grouping variables: `year`, `month`
+    ## `summarise()` has grouped output by 'BUNDESLAND'. You can override using the
+    ## `.groups` argument.
+
+``` r
+ger_end <- germany %>%
+  left_join(temp, by = c("NUTS_NAME" = "BUNDESLAND"))
+```
+
+Plotting:
+
+``` r
+p <- ggplot(ger_end) +
+  geom_sf(aes(fill = av_price)) +
+  labs( title = 'Year: {closest_state}') +
+  scale_fill_gradient(low = '#709AE1', high = '#FD7446')+
+  transition_states(date)
+animate(p, fps=3)
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-64-1.gif)<!-- -->
