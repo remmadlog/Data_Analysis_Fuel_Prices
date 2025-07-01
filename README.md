@@ -30,3 +30,6 @@ A full overview can be found here [Analysis_Fuel_Price.md](Analysis_Fuel_Price.m
 
 ### Partial Results -- Animated Map of Germany with Average e10 Prices per Federal State over Time
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-64-1.gif)<!-- -->
+
+### ARIMA Forcasting for next 6 Month for e10
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-79-1.png)<!-- -->

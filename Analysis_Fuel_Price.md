@@ -680,7 +680,7 @@ part of the same region/state (Bundesland).
 
 To identify the post code and provide a city name, we use data set
 obtained
-[here](https://www.datenbörse.net/item/Postleitzahlen-Datenbank_Deutschland).
+\[here\]\[<https://www.datenbörse.net/item/Postleitzahlen-Datenbank_Deutschland>\].
 We had to replace the seperator `;` with `,`.
 
 Loding the data:
@@ -691,7 +691,7 @@ plz <- read.csv("Datasets/Postleitzahlen 2023 mit Bundesland.csv")
 # (post code, name of place (city name), additional information, region/state)
 ```
 
-The joining attempted
+A joining attempted:
 
 > `full_fuel_table_cleaned_plz <- left_join(full_fuel_table_cleaned, plz, by=c("post_code"= "PLZ"))`
 
@@ -1067,8 +1067,238 @@ animate(p, fps=3)
 
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-64-1.gif)<!-- -->
 
-
-Sadly we do not see so much differences in each time state.
-This make sense though, since fuel prices in Germany are primarily driven by supply and demand, influenced by global oil prices, and further affected by taxes and value-added tax.
+Sadly we do not see so much differences in each time state. This make
+sense though, since fuel prices in Germany are primarily driven by
+supply and demand, influenced by global oil prices, and further affected
+by taxes and value-added tax.
 
 For now, we will leve it at this.
+
+# Prediction using ARIMA
+
+## Preparation
+
+Adding `date` column, using `year` and `month` columns.
+
+``` r
+# combine year and month to a new date column
+full_fuel_table_cleaned$date <- zoo::as.yearmon(paste(full_fuel_table_cleaned$year, full_fuel_table_cleaned$month), "%Y %m")
+```
+
+Creating a table to forcast **e10** prices:
+
+``` r
+fc_e10 <- full_fuel_table_cleaned %>%
+        filter(fuel == "e10") %>%
+        group_by(date) %>%
+        summarise(av_price=mean(price))
+```
+
+## Plotting the Time Series
+
+Considering the price of **e10** over time.
+
+``` r
+ggplot(fc_e10, aes(date, av_price)) + geom_line()
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-67-1.png)<!-- -->
+
+Creating a **logplot**:
+
+``` r
+plot(diff(log(fc_e10$av_price)),type='l', main='log returns plot')
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-68-1.png)<!-- -->
+
+In order to perform reasonable modeling on our data, the time series
+must be stationary in the sense that the mean, the variance, and the
+covariance of the series should be constant with time. The **logplot**
+above seams stationary. We confirm this in the following blocks.
+
+First we load the needed library.
+
+``` r
+library(tseries)
+```
+
+We then test the stationary of the **log** data.
+
+``` r
+adf.test(diff(log(fc_e10$av_price)), alternative="stationary", k=0)
+```
+
+    ## Warning in adf.test(diff(log(fc_e10$av_price)), alternative = "stationary", :
+    ## p-value smaller than printed p-value
+
+    ## 
+    ##  Augmented Dickey-Fuller Test
+    ## 
+    ## data:  diff(log(fc_e10$av_price))
+    ## Dickey-Fuller = -7.9609, Lag order = 0, p-value = 0.01
+    ## alternative hypothesis: stationary
+
+## Determining Parameters
+
+The Dickey-Fuller test returns a p-value of 0.01. The warning suggests
+tht this value is even smaller. This is resulting in the rejection of
+the null hypothesis and accepting the alternate, that the data is
+stationary.
+
+ACF, or Auto-Correlation Function, measures the correlation between a
+time series and its past (lagged) values. Essentially, it shows how
+current values in the series are related to their previous values. This
+information is particularly useful for identifying the appropriate
+number (or order) of moving average (MA) terms to include in an ARIMA
+model.
+
+``` r
+acf(diff(log(fc_e10$av_price)))
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-71-1.png)<!-- -->
+
+PACF, or Partial Auto-Correlation Function, measures the correlation
+between a time series and its lagged values after removing the effects
+of intermediate lags. Unlike ACF, which captures all
+correlations—including indirect ones—PACF isolates the direct
+relationship between a value and a specific lag. If a residual still
+contains useful information explainable by a particular lag, PACF will
+highlight it. This makes PACF especially valuable for determining the
+appropriate number (or order) of auto-regressive (AR) terms in an ARIMA
+model.
+
+``` r
+pacf(diff(log(fc_e10$av_price)))
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-72-1.png)<!-- -->
+
+To determine the order of our parameters, we look at the difference in
+lags in the plots for the ACF and PACF. A significant drop after some
+lag in the plots, suggests that the ordered terms we should use for our
+parameters.
+
+In oure case we see a drop in the ACF plot after 1 and in the PACF plot
+after 3. Resulting in an MR(1) and an AR(3).
+
+## Building the Arima Modle
+
+Loading the library first.
+
+``` r
+library(forecast)
+```
+
+Our analysis above suggest an ARIMA with the parameters 3, 1, 1:
+
+``` r
+(fit <- arima(fc_e10$av_price, c(3, 1, 1)))
+```
+
+    ## 
+    ## Call:
+    ## arima(x = fc_e10$av_price, order = c(3, 1, 1))
+    ## 
+    ## Coefficients:
+    ##           ar1     ar2      ar3     ma1
+    ##       -0.2684  0.1071  -0.3470  0.4945
+    ## s.e.   0.1897  0.0953   0.0954  0.1987
+    ## 
+    ## sigma^2 estimated as 0.003122:  log likelihood = 155.08,  aic = -300.17
+
+Did we do good? In general a lower AIC score is better. To see if we
+could do better, we can just test for different parameters or just do a
+full parameter search.
+
+For that we can use the `auto.arima` function
+
+``` r
+fit_auto <- auto.arima(fc_e10$av_price, trace=TRUE)
+```
+
+    ## 
+    ##  ARIMA(2,1,2) with drift         : -293.121
+    ##  ARIMA(0,1,0) with drift         : -286.3125
+    ##  ARIMA(1,1,0) with drift         : -286.6097
+    ##  ARIMA(0,1,1) with drift         : -286.3938
+    ##  ARIMA(0,1,0)                    : -288.274
+    ##  ARIMA(1,1,2) with drift         : -294.892
+    ##  ARIMA(0,1,2) with drift         : -286.2559
+    ##  ARIMA(1,1,1) with drift         : -284.451
+    ##  ARIMA(1,1,3) with drift         : -294.5449
+    ##  ARIMA(0,1,3) with drift         : -296.1007
+    ##  ARIMA(0,1,4) with drift         : -294.2008
+    ##  ARIMA(1,1,4) with drift         : -294.4877
+    ##  ARIMA(0,1,3)                    : -298.1106
+    ##  ARIMA(0,1,2)                    : -288.3579
+    ##  ARIMA(1,1,3)                    : -296.6533
+    ##  ARIMA(0,1,4)                    : -296.2872
+    ##  ARIMA(1,1,2)                    : -297.0185
+    ##  ARIMA(1,1,4)                    : -296.6057
+    ## 
+    ##  Best model: ARIMA(0,1,3)
+
+We see that we can get slightly worse results using `ARIMA(0,0,3)`
+instead of `ARIMA(3,0,1)` This will be even worse, since `auto.arima`
+uses approximations in order to be faster. Refitting the modle gives us
+
+``` r
+(fit <- arima(fc_e10$av_price, c(0, 1, 3)))
+```
+
+    ## 
+    ## Call:
+    ## arima(x = fc_e10$av_price, order = c(0, 1, 3))
+    ## 
+    ## Coefficients:
+    ##          ma1     ma2      ma3
+    ##       0.2208  0.0277  -0.3250
+    ## s.e.  0.0930  0.0896   0.0855
+    ## 
+    ## sigma^2 estimated as 0.003236:  log likelihood = 153.25,  aic = -298.51
+
+Therefor, we stick to initial `ARIMA(3,0,1)`.
+
+``` r
+(fit <- arima(fc_e10$av_price, c(3, 1, 1)))
+```
+
+    ## 
+    ## Call:
+    ## arima(x = fc_e10$av_price, order = c(3, 1, 1))
+    ## 
+    ## Coefficients:
+    ##           ar1     ar2      ar3     ma1
+    ##       -0.2684  0.1071  -0.3470  0.4945
+    ## s.e.   0.1897  0.0953   0.0954  0.1987
+    ## 
+    ## sigma^2 estimated as 0.003122:  log likelihood = 155.08,  aic = -300.17
+
+Let us see how the `ARIMA(3,0,1)` fits our data before doing the
+forcasting.
+
+``` r
+plot(as.ts(fc_e10$av_price) )
+lines(fitted(fit), col="red")
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-78-1.png)<!-- -->
+
+This looks quit pleasing, but we just tested the model on the training
+data.
+
+### Forcasting
+
+Now we continue with the forcasting for the next **6** month.
+
+``` r
+futurVal <- forecast(fit,h=6)
+plot(forecast(futurVal))
+```
+
+![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-79-1.png)<!-- -->
+
+The dark blue area shows the 80% confidence interval, whereas the light
+blue shows the 95% confidence interval.
