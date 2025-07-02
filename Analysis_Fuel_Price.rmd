@@ -1,5 +1,5 @@
 ---
-title: "Daily German Fuel Price Analysis (2022)"
+title: "German Fuel Price Analysis 2014-2023"
 output: rmarkdown::github_document
 ---
 
