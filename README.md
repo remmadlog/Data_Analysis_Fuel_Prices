@@ -19,10 +19,10 @@ A full overview can be found here [Analysis_Fuel_Price.md](Analysis_Fuel_Price.m
 ### Partial Results -- Average Fuel Price per Month in 2022
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
-### Partial Results -- Average Price of e10 per Month Groupen by Year
+### Partial Results -- Average Price of e10 per Month Grouped by Year
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
-### Partial Results -- Average Fuel Price per Month from 214-2023
+### Partial Results -- Average Fuel Price per Month from 2014-2023
 ![](Analysis_Fuel_Price_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 ### Partial Results -- Map of Germany with Average e10 Prices per Federal State in 2022
